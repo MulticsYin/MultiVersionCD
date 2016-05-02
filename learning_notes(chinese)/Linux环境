@@ -1,0 +1,155 @@
+           ××××××××××××××××××××××××××××××××××   Linux环境          ××××××××××××××××××××××××××××××××××××××××××××
+
+-----------------------------        程序参数       ------------------------------------------
+
+	当程序运行时，它是从main函数开始的：
+		int main(int argc, char *argv[])
+		argc是程序参数的个数，argv是一个代表参数自身的字符串数组；
+		Linux的shell一般会在设置argc和argv之前对文件名参数进行扩展；
+
+	getopt函数：提供命令行开关的标准编程接口；
+		#include<unistd.h>
+		int getopt(int argc, char *const argv[], const char *optstring);
+		exterm char *optarg;
+		extern int optint, oprerr, optopt;
+	getopt函数将传递给程序main函数的argc和argv作为参数，同时接受一个选项指定符字符串optstring，该字符告诉getopt那些选项可以用，以及他们是否有关联值；optstring只是一个字符串列表，每个字符代表一个单字符选项；如果一个字符后面紧跟着一个冒号（：），则说明该选项有一个关联值作为下一个参数；
+	GNU C函数库包含getopt的另一个版本，称作getopt_long，它接受以双划线（- -）开始的长参数；
+
+--------------------------------      环境变量       ---------------------------------------------
+
+	环境由一组格式为“名字=值”的字符串组成；
+		#include<stdlib.h>
+		char *getenv(const char *name);
+		int putenv(const char *string);
+	getenv函数以给定的名字搜索环境中的一个字符串，并返回与该名字相关的值；如果请求变量不存在，返回null；
+	putenv函数以一个格式为“名字=值”的字符串作为参数，并将该字符串加到当前环境中，如果由于内存不足而不能扩展环境，则失败返回-1，此时，错误变量被设置为ENOMEM；
+
+	程序可以通过environ变量直接访问这个字符串数组；
+		#include<stdlib.h>
+		extern char **environ;
+
+-----------------------------------           时间和日期         ----------------------------------------
+
+	所有的UNIX（Linux）系统都使用同一个时间和日期的起点：格林尼治时间（GMT）1970年1月1日午夜（0点）；
+	时间通过一个预定义的类型time_t来处理，在Linux系统中，它是一个长整形，与时间处理的函数一起定义在头文件time.h中；
+
+	time函数：得到底层的时间值，返回是从纪元开始至金的秒数，如果tloc不是一个空指针，time函数还会把返回值写入tloc指针指向的位置；
+		#include<time.c>
+		time_t time(time_t *tloc);
+
+	difftime：计算两个时间值的差，并将time1-time2的值作为浮点数返回；（考虑到最大限度可移植性，推荐使用）
+		#include<time.h>
+		double difftime(time_t time1, time_t time2);
+
+	gmtime函数：把底层时间分解为一个结构；
+		#include<time.h>
+		struct tm *gmtime(const time_t *timeval);
+	tm结构部分成员：
+		int tm_sec			秒，0-61		//允许临时闰秒或双闰秒；
+		int tm_min			分，0-59
+		int tm_hour			小时，0-23
+		int tm_mday			月份中的日期，0-31
+		int tm_mon			月份，0-11（一月份为0）
+		int tm_year			从1900年开始计算的年份
+		int tm_wday			星期几，0-6（周日为0）
+		int tm_yday			年份中的日期，0-365
+		int tm_isdst		是否夏令时
+
+	localtime函数：查看当地时间，返回结构中包含的值已根据当地时区和是否采用夏令时做了调整；
+		#include<time.h>
+		struct tm *localtime(const time_t *timeval);
+
+	mktime函数：把分解出来的tm结构转换为原始的time_t时间值,如果不能表示为time_t值返回-1；
+		#include<time.h>
+		time_t mktime(struct tm *timeptr);
+
+	更好的时间和日期显示：asctime函数返回一个字符串，它表示由tm结构timeptr所给出的时间和日期，ctime函数等于调用下面的函数：asctime(localtime(timeval));
+		#include<time.h>
+		char *asctime(const struct tm *timeptr);
+		char *ctime(const time_t *timeval);
+
+	strftime：格式化timeptr指向的tm结构所表示的时间和日期，并将结果放在字符串S中；
+		#include<time.h>
+		size_t strftime(char *s, size_t maxsixe, const char *format, struct tm *timeptr);
+
+	strptime函数：以一个代表日期和时间的字符串为参数，并创建表示同一日期和时间的tm结构，返回一个指针，指向转换过程处理的最后一个字符的那个字符；
+		#include<time.h>
+		char *strptime(const char *buf, const char *format, struct tm *timeptr);
+
+--------------------------------          临时文件        ----------------------------------------------------
+
+	tmpnam函数：生成一个不唯一的文件名，返回一个不与任何已存在文件同名的有效文件名；
+		#include<stdio.h>
+		char *tmpnam(char *s);
+
+	tmpfile函数：立即使用临时文件，在给它命名的同时打开它，返回文件流指针，出错返回空指针并设置errno的值；
+		#include<stdio.h>
+		FILE *tmpfile(void);
+
+	注：UNIX有另一种生成文件名的方式，就是使用mktemp和mkstemp；
+
+---------------------------------        用户信息        -------------------------------------------
+
+	用户标识符（UID）有它自己的类型——uid_t，定义在头文件sys/types.h中，getuid函数返回程序关联的UID，通常为启动用户的UID；getlogin函数返回与当前用户关联的登录名；
+		#include<sys.types.h>
+		#include<unistd.h>
+		uid_t getuid(void);
+		char *getlogin(void);
+
+	一个标准而有效的获取用户信息的编程接口；密码数据库结构定义在头文件pwd.h中，getpwuid和getpwnam返回一个指针，该指针指向与某个用户对应的passwd结构，出错返回空指针并设置errno；
+		#include<sys/types.h>
+		#include<pwd.h>
+		struct passwd *getpwuid(uid_t uid);
+		struct passwd *getpwnam(const char *name);
+
+	扫描密码文件中所有的信息；getpwent函数依次返回每个用户的信息数据项，到达文件尾时，返回一个空指针，可以使用endpwent函数来终止处理过程，setpwent函数重置读指针到密码文件的开始位置；
+		#include<pwd.h>
+		#include<sys/types.h>
+		void endpwent(void);
+		struct passwd *getpwent(void);
+		void setpwent(void);
+
+	注：用户和组标识符还可以被其他一些不太常用的函数获得,只有超级用户才能调用setuid和setgid；
+		#include<sys/types.h>
+		#include<unistd.h>
+		uid_t geteuid(void);
+		gid_t getgid(void);
+		gid_t getegid(void);
+		int setuid(uid_t uid);
+		int setgid(gid_t gid);
+
+-----------------------       主机信息       --------------------------------------------
+
+	gethostname函数：把机器网络名写入函数name字符串，成功返回0.出错返回-1；
+		#include<unistd.h>
+		int gethostname(char *name, size_t namelen);
+
+	uname函数：获得关于主机更多的详细信息，uname函数把主机信息写入name参数指向的结构，utsname结构定义在头文件sys/utsname.h中，成功返回非负数，出错返回-1并设置errno来指出错误；
+		#include<sys/utsname.h>
+		int uname(struct utsname *name);
+
+	gethostid函数：获得每台主机唯一标识符，返回与主机对应的唯一值；
+		#include<unistd.h>
+		long gethostname(void);
+
+---------------------          日志                -------------------------------------------
+
+	syslog函数：为所有程序产生日志信息提供了一个接口，向系统的日志设施（facility）发送一条日志信息；
+		#include<syslog.h>
+		void syslog(int priority, const char *message, arguments...);
+
+	改变日志记录行为的函数；
+		#include<syslog.h>
+		void closelog(void);
+		void openlong(const char *ident, int logopt, int facility);
+		int setlogmask(int maskpri);ssss
+
+-----------------         资源和限制            --------------------------------------
+
+	头文件limits.h中定义了代表操作系统方面限制的显示常量，头文件sys/resource.h提供了资源操作方面的定义；
+		#include<sys/resource.h>
+		int getpriority(int which, id_t who);
+		int getpriority(int which, id_t who, int priority);
+		int getrlimit(int resource, struct rlimit *r_limit);
+		int getrlimit(itn resource,const struct rlimit *r_limit);
+		int getrusage(int who, struct rusage *r_usage);

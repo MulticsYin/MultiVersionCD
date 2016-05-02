@@ -1,0 +1,250 @@
+                                                                                   ×××××××××××××××××       文件编程           ××××××××××××××××
+
+-------------------------------------    库函数   ------------------------------------------
+重点在于五个基本函数-open,close,read,write,ioctl.
+
+内核：一组设备驱动程序，对系统硬件进行控制的底层接口。（硬件的特有功能通常可通过ioctl(用于I/O控制)系统调用来提供）。
+	访问设备驱动的底层函数（系统调用）；
+		open:打开文件或设备；
+		read：从打开的文件或设备里读取数据；
+		write：向文件或设备写数据；
+		close：关闭文件或设备；
+		ioctl：把控制信息传给驱动程序；
+
+每个运行的程序被称为进程，并有一些与之相关的描述符。
+	0：标准输入；
+	1：标准输出；
+	2：标准错误；
+
+	write系统调用：把缓冲区buf的前nbytes个字节写入与文件描述符fildes相关的文件；成功返回写入的字节数，0表示未写入任何数据，出错返回-1；
+		#include<unistd.h>
+		sze_t write(int fildes, const void *buf, size_t nbytes);
+	
+	read系统调用：从与文件描述符fildes相关联的文件里读入nbytes个字节的数据，并把他们放到数据区buf中；返回实际读入的字节数，0表示未读入的字节数，出错返回-1；
+		#include<unistd.h>
+		size_t read(int fildes, void *buf, size_t nbytes);
+
+	open系统调用：创建一个新的文件描述符，建立一条到文件或设备的访问路径；如果调用成功，返回一个可以被write，read和其他系统调用的文件描述符（一个非负整数），出错返回-1并设置全局变量error来指明失败原因；
+		#include<fcntl.h>
+		#include<sys/types.h>
+		#include<sys/stat.h>
+		int open(const char *path, int oflags);
+		int open(const char *path, int oflags, mode_t mode);
+		注：path：准备打开的文件或设备的名字；oflags参数通过必须文件访问模式与其他可选模式相结合的方式指定的；
+			O_RDONLY   以只读的方式打开；
+			O_WRONLY   以只写的方式打开；
+			O_RDWR     以读写方式打开；
+			O_APPEND   把写入数据追加在文件的末尾；
+			O_TRUNC    把文件长度设置为0，丢弃已有的内容；
+			O_CREAT    如果需要，就按mode中给出的访问模式来创建文件；
+			O_EXCL     与O_CREAT一起使用，确保创建者创建出文件；
+	访问权限的初始值：使用带有O_CREAT标志的open调用来创建文件时，你必须使用有三个参数格式的open调用，第三个参数mode是几个标志按位或后得到的。
+		S_IRUSR	读权限，文件所属者；	S_IWUSR	写权限，文件所属者；	S_IXSUR	执行权限，文件所属者；
+		S_IRGRP	读权限，文件所属组；	S_IWGRP	写权限，文件所属组；	S_IXGRP	执行权限，文件所属组；
+		S_IROTH	读权限，其他用户；		S_IWOTH	写权限，其他用户；		S_IXOTH	执行权限，其他用户；
+	注：open调用给出的mode值与当时的用户掩码的反值做AND操作；
+
+	close系统调用：终止文件描述符fildes与对应文件的关联；成功返回0，出错返回-1；
+		#include<unistd.h>
+		int close(int fildes);
+
+	ioctl系统调用：用于控制设备及其描述符行为和配置底层服务的接口；ioctl对描述符fildes引用的对象执行cmd参数中给出的操作；
+		#include<unistd.h>
+		int ioctl(int fildes, int cmd,...);
+
+	其他与文件管理有关的系统调用：
+		lessk系统调用：对文件描述符fildes的读写指针进行设置。
+			#include<unistd.h>
+			#include<sys/types.h>
+			off_t lseek(int fildes, off_t offset, int whence);
+		fstat,stat和lstat系统调用：fstat系统调用返回与打开的文件描述相关的文件的状态信息，该信息将会写到一个buf结构中，buf的地址以参数形式传递给fstat；stat和lstat返回的是通过文件名查到的状态信息，当文件是一个链接符号时，lstat返回该符号链接本身的信息，stat返回该链接指向文件的信息；
+			#include<unistd.h>
+			#include<sys/types.h>
+			#include<sys/stat.h>
+			int fstat(int fildes, struct stat *buf);
+			int stst(const char *path, struct stat *buf);
+			int lstat(const char *path, struct stat *buf);
+		dup和dup2系统调用：复制文件符的方法，能通过两个或者更多不同的描述符来访问同一个文件(进程间通讯很有用)；
+			#include<unistd.h>
+			int dup(int fildes);
+			int dup2(int fildes,int fildes2);
+
+
+
+-------------------------------    标准I/O库  ------------------------------------------
+
+启动程序时，有三个文件流自动打开。分别为stdin,stdout和stderr。在stdio.h头文件里定义的，分别代表标准输入，标准输出和标准错误输出，与底层文件描述符相对应；
+
+	fopen函数：类似于底层的open系统调用，用于文件的和终端的输入输出；fopen打开filename参数指定的文件，并把它与一个文件流相关联起来。mode指定文件打开的方式；
+			“r” 或  “rb”：以只读的方式打开。
+			“w” 或  “wb”：以写的方式打开，并把文件长度截短为零。
+			“a” 或  “ab”：以写的方式打开，新内容追加在文件尾。
+			“r+” 或  “rb+”  或  “r+b”：以更新的方式打开（读和写）。
+			“w+” 或  “wb+”  或  “w+b”：以更新的方式打开，并把文件长度截短为零。
+			“a+” 或  “ab+”  或  “a+b”：以更新的方式打开，新内容追加在文件尾。
+		#include<stdio.h>
+		FILE *fopen(const char *filename, const char *mode);
+	成功返回一个非空的FILE *指针，失败返回NULL值，NULL在头文件stdio.h里定义；
+
+	fread函数：从一个文件流里读取数据，数据从文件流stream读到由ptr指向的数据缓冲区里；size参数指定每个数据记录的长度，计数器nitems给出要传输的记录个数；返回值是成功读到数据缓冲区里的记录个数（不是字节数），到达末尾时，返回值可能小于nitems，甚至可能为零；
+		#include<stdio.h>
+		size_t fread(void *ptr, size_t size, size_t nitems, FILE *stream);
+
+	fwrite函数：从指定的数据缓冲区里取出数据记录，并把它们写到输出流中；返回成功写入的个数；
+		#include<stdio.h>
+		size_t fwrite(const void *ptr, size_t size, size_t nitems, FILE *stream);
+
+	fclose函数：关闭指定的文件流stream，使所有尚未写出的数据都写出。
+		#include<stdio.h>
+		int fclose(FILE *stream);
+
+	fflushi函数：把文件流里未写出的数据立刻写出；
+		#include<stdio.h>
+		int fflush(FILE *stream);
+
+	fseek函数：在文件流里为下一次读写操作指定位置；返回一个整数，0表示成功，-1表示失败并设置error指出错误；
+		#include<stdio.h>
+		int fseek(FILE *stream, long int offset, int whence);
+
+	fgetc,getc和getchar函数：fgetc和getc从文件流中取出下一个字节并把它作为一个字符返回；出错返回EOF，必须通过ferror或feof来区分这两种情况,getchar从标准输入读取下一个字符；
+		#include<stdio.h>
+		int fgetc(FILE *stream);
+		int getc(FILE *stream);
+		int getchar();
+
+	fputc,putc和putchar函数：fpuec和putc把一个字符写到一个输出文件流中，返回写入的值，失败返回EOF；putchar函数相当于putc(c,stdout),把单个字符写到标准输出；
+		#include<stdio.h>
+		int fputc(int c, FILE *stream);
+		int putc(int c, FILE *stream);
+		int putchar(int c);
+
+	fgets和gets函数：从输入文件流里取出一个字符串；
+		#include<stdio.h>
+		char *fgets(char *s, int n, FILE *stream);
+		chat *gets(char *s);
+
+
+----------------------------------------       格式化输入输出     --------------------------------------------------------
+
+	pritnf，fprintf和sprintf函数：printf函数把自己的输出送到标准输出。fprintg函数把自己的输出送到一个指定的文件流。sprintf函数把自己的输出和一个结尾空字符写到作为参数传递过来的字符串s里；
+		#include<stdio.h>
+		int printf(const char *format,...);
+		int printf(char *s, const char *format, ...);
+		int fprintf(FILE *stream, const char *format, ...);
+	注：常用的转换控制符；
+		%d：%i：以十进制格式输出一个整数；
+		%o：%x：以八进制或十六进制输出一个整数；
+		%c：输出一个字符；
+		%s：输出一个字符串；
+		%f：输出一个（单精度）浮点数；
+		%e：以科学计数法输出一个双精度浮点数；
+		%g：以通用格式输出一个双精度浮点数；
+
+	scanf,fscanf和sscanf函数：从一个文件流里读取数据，并把数据放到以指针参数形式传递过来的地址处的变量中；
+		#include<stdio.h>
+		int scanf(const char *format, ...);
+		int fscanf(FILE *stream, const char *format, ...);
+		int sscanf(const char *s, const char *format, ...);
+	注：转换控制符：
+		%d：读取一个十进制整数；
+		%o，%x：读取一个八进制或十六进制整数；
+		%f，%e，%g：读取一个浮点数；
+		%c：读取一个字符（不会忽略空格）；
+		%s：读取一个字符串；
+		%[ ]：读取一个字符集合；
+		%%：读取一个%字符；
+
+	stdio函数库的其他函数；
+		fgetpos：获得文件流当前（读写）位置；
+		fsetpos：设置文件流当前（读写）位置；
+		ftell：返回文件流当前（读写）位置的偏移值；
+		rewind：重置文件流里的的读写位置；
+		freopen：重新使用一个文件流；
+		setvbuf：设置文件流的缓冲机制；
+		remove：相当于unilink函数，如果他的位置是一个目录的话，其作用相当与rmdir函数；
+	
+	文件流错误：错误由外部变量errno指出；
+		#include<errno.h>
+		extern int errno;
+
+		#include<stdio.h>
+		int ferror(FILE *stream);
+		int feof(FILE *stream);
+		void clearerr(FILE *stream);
+
+	文件流和文件描述符：fdopen在一个已打开的文件描述符上创建一个新的文件流，为一个已打开的文件描述符提供stdio缓冲区；fdopen失败返回-1，*fdopen失败返回NULL；
+		#include<stdio.h>
+		int fileno(FILE *stream);
+		FILE *fdopen(int fildes, const char *mode);
+
+
+---------------------------------------       文件和目录的相关函数     ------------------------------------------
+
+	chmod系统调用：改变文件或目录的访问权限；
+		#include<sys/stat.h>
+		int chmod(const char *path, mode_t mode);
+
+	chown系统调用：改变一个文件的属主；
+		#include<sys/stat.h>
+		#include<unistd.h>
+		int chown(const char *path, uid_t owner, gid_t group);
+
+	unlink,link和symlink系统调用：unlink删除一个文件的目录项并减少它的连接数，成功返回0，失败返回-1；link创建一个已有文件path1的新链接，新目录项由path2给出，symlink以类似的方式创建符号链接；
+		#include<unistd.h>
+		int unlink(const char *path);
+		int link(const char *path1, const char *path2);
+		int symlink(const char *path1, const char *path2);
+	注：一个文件的符号链接并不会增加该文件的链接数，所以它不会像普通（硬）链接那样防止文件被删除；
+
+	mkdir系统调用：创建目录，path作为新目录的名字，权限由mode设定（按open的O_CREAT选项中的有关定义设置），服从umusk的设置；
+		#include<sys/types.h>
+		#include<sys/stat.h>
+		int mkdir(const char *path, mode_t mode);
+	rmdir系统调用：删除目录（目录为空）；
+		#include<unistd.h>
+		int rmdir(const char *path);
+
+	chdir系统调用：浏览目录；
+		#include<unistd.h>
+		int chdir(const char *path);
+	getcwd系统调用：确定自己当前的工作目录,函数把当前目录的名字写到缓冲区buf里，长度超过（ERANGE错误）返回NULL，成功返回指针buf；
+		#include<unistd.h>
+		char *getcwd(char *buf, size_t size);
+
+	与目录操作有关的函数在dirent.h头文件中声明，DIR的结构（在头文件声明）作为目录操作的基础，被称为目录流的指向这个结构的指针（DIR *）被用来完成各种目录操作，方法与普通文件流（FILE *）相似，目录数据项本身在dirent结构（头文件中声明）中返回，因为用户不应该直接改动DIR结构中的数据字段；
+
+	opendir系统调用：打开并建立一个目录流，成功返回一个指向DIR结构的指针，用于读取目录的数据项，失败返回一个空指针；
+		#include<sys/types.h>
+		#include<dirent.h>
+		DIR *opendir(const char *name);
+
+	readdir函数：返回一个指针，保存着目录流中下一个目录项有关资料，发生错误或到达目录尾，返回NULL；
+		#include<sys/types.h>
+		#incude<dirent.h>
+		struct dirent *readdir(DIR *dirp);
+	注：dirent结构包含目录的目录项包含以下部分，想要了解目录中某个文件，需要stat调用；
+
+	telldir函数：返回记录着一个目录流里的当前位置，可以利用接下来的seekdir调用中利用这个值来重置目录扫描到当前位置；
+		#include<sys/types.h>
+		#include<dirent.h>
+		long int telldir(DIR *dirp);
+
+	seekdir函数：设置目录流dirp的目录项指针，loc的值用来设置指针的位置，通过前一个调用telldir获得；
+		#include<sys/types.h>
+		#include<dirent.h>
+		void seekdir(DIR *dirp, long int loc);
+
+	close函数：关闭一个目录流并释放与之相关的资源，成功返回0，错误返回-1；
+		#include<sys/types.h>
+		#include<dirent.h>
+		int closedir(DIR *dirp);
+
+--------------------------      错误处理         ----------------------------------------
+
+	strerror函数：把错误代码映射为一个字符串，该字符串对发生的错误类型进行说明；
+		#include<string.h>
+		char *strerror(const char *s);
+
+	perror：把errno变量中报告的当前错误映射到一个字符串，并把它输入到标准错误输出流；
+		#include<stdio.h>
+		void perror(const char *s);
